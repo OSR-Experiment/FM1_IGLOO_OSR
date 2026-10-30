@@ -1,0 +1,41 @@
+# Banquise in the host simulator:
+#   python3 fm1-base/tools/build.py . --host, then build/host/banquise_host tests/walk.txt build/host
+wait 800
+shot start.png
+expect scene 0
+# walk a little (EDIT is up): the help goes, the steps play
+press PLAY
+wait 600
+release PLAY
+press REC
+wav walk.wav
+wait 2500
+release REC
+wait 1500
+wavstop
+shot walked.png
+# home: HOME, then the synth (it is right ahead, up from the door)
+tap HOME
+wait 800
+expect scene 1
+press EDIT
+wait 900
+release EDIT
+shot home.png
+tap LFO
+wait 100
+expect synth 1
+key 9 down
+wait 30
+key 9 up
+wav home_synth.wav
+wait 2500
+wavstop
+shot home_synth.png
+# out through the door
+press PLAY
+wait 2200
+release PLAY
+wait 300
+expect scene 0
+shot out_again.png

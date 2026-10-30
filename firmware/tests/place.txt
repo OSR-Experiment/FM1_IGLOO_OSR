@@ -1,0 +1,25 @@
+# walk east from the igloo to the campfire: the synth wakes up there
+wait 600
+press PLAY
+wait 500
+release PLAY
+press REC
+wait 5200
+release REC
+wait 3500
+shot fire.png
+expect place 8
+key 9 down
+wav fire_chord.wav
+wait 2000
+key 9 up
+wait 1500
+wavstop
+shot fire_played.png
+# the sky: night
+turn ALGO 2
+wait 400
+shot night.png
+turn ALGO 1
+wait 400
+shot storm.png

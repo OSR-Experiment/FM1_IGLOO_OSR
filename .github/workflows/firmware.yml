@@ -1,0 +1,96 @@
+# Builds the Banquise firmware (.fwsc, installable on an FM-1, in firmware/) on GitHub's machines, which can reach JieLi's
+# toolchain server. Also runs the host simulator's tests.
+# Result: the Releases page ("latest"), or Actions tab > the run > "Artifacts" > banquise-firmware.
+name: Build firmware
+defaults:
+  run:
+    working-directory: firmware
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q libtinfo5 libncurses5 xz-utils
+          pip install -q Pillow fonttools
+
+      - name: Host simulator tests
+        run: |
+          python3 fm1-base/tools/build.py . --host
+          build/host/banquise_host tests/walk.txt build/host
+          build/host/banquise_host tests/place.txt build/host
+
+      - name: JieLi toolchain
+        run: fm1-base/tools/get_toolchain.sh "$HOME/.jieli"
+
+      - name: AC79 SDK (the three files the package needs)
+        run: |
+          set -x
+          SDK="$HOME/.jieli/ac79-sdk"
+          TAG=AC79NN_SDK_V1.2.1_2023-12-13
+          # 1. felucca-bsp's script (GitHub mirror, pinned revision)
+          if fm1-base/bsp/tools/get_sdk.sh "$SDK"; then exit 0; fi
+          rm -rf "$SDK"
+          # 2. JieLi's own repository on Gitee, the tag, only the tools folder
+          if git clone --depth 1 --branch "$TAG" --filter=blob:none --sparse https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git "$SDK" \
+             && git -C "$SDK" sparse-checkout set cpu/wl82/tools; then :; else
+            rm -rf "$SDK"
+            # 3. the whole tag, shallow
+            git clone --depth 1 --branch "$TAG" https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git "$SDK"
+          fi
+          cd "$SDK"
+          echo "4e3b4c220dc96641cb5a723f41e68ce41d5261ae9434bb33fbd7f2c59976ded4  cpu/wl82/tools/uboot.boot" | sha256sum -c -
+          echo "276579954f076886a6a7694f65dc71c034a63a2c204b76749065c0ac7b010d1b  cpu/wl82/tools/cfg_tool.bin" | sha256sum -c -
+          echo "41167491bffed4651750719c973d2758adeb9021a5670d02d6a53c85ed80ea7d  cpu/wl82/tools/cfg/eq_cfg_hw.bin" | sha256sum -c -
+
+      - name: Firmware
+        run: |
+          export JIELI_TOOLCHAIN="$HOME/.jieli/toolchain" AC79_SDK="$HOME/.jieli/ac79-sdk"
+          set -o pipefail
+          if ! python3 fm1-base/tools/build.py . 2>&1 | tee build.log; then
+            # the log's errors as annotations (readable from the API without signing in)
+            grep -nE "error|Error|ERROR|undefined|overflow|exceed|check|fail" build.log | head -60 > errs.txt || true
+            echo "::error title=build (errors)::$(sed 's/%/%25/g' errs.txt | awk '{printf "%s%%0A", $0}')"
+            echo "::error title=build (tail)::$(tail -40 build.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+            exit 1
+          fi
+          echo "::notice title=build (summary)::$(tail -30 build.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+
+      - name: Publish the firmware (Releases page and the builds branch)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          F=$(ls build/*.fwsc | head -1)
+          cp "$F" Banquise.fwsc
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest Banquise.fwsc --prerelease --title "Banquise - latest build (not yet tested on an FM-1)" \
+            --notes "Built automatically from ${GITHUB_SHA::7}. Not yet tested on a real FM-1: try it in the browser emulator first."
+          mkdir out && cp Banquise.fwsc out/ && cd out
+          echo "$GITHUB_SHA" > COMMIT
+          git init -q -b builds && git add . 
+          git -c user.name=github-actions -c user.email=actions@github.com commit -q -m "build ${GITHUB_SHA::7}"
+          git push -f -q "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" builds
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: banquise-firmware
+          path: |
+            firmware/build/*.fwsc
+            firmware/build/*.bin
+            firmware/build/host/*.png
+            firmware/build/host/*.wav
+          if-no-files-found: warn

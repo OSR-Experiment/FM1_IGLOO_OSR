@@ -6,6 +6,18 @@ There is a quest (the captain's journal, a lighthouse to relight, an ice flute, 
 
 **Play it:** open `index.html` in a browser (English) or `fr.html` (Français). Turn the sound on, then walk.
 
+## On the FM-1 (firmware, in progress)
+
+`firmware/` is Banquise as a real FM-1 firmware, built on fm1-base like OSR-1. It is being ported in steps:
+
+1. **The walk** (done): the ice field, Obsimo, Seito, the wind, the drone and the steps, day and night, the igloo and its synth, the places that wake the synth up.
+2. The playable places: fishing, the boat and its kick, the ice cave, the forest, the fire, the lighthouse.
+3. The quest and the rest: the journal, the ending, the outfits, the seals, Yucca...
+
+- **Try it in the browser:** `emu/` runs the same firmware code, compiled to WebAssembly (arrow keys walk, Space is LFO).
+- **Install it:** each push builds `Banquise.fwsc` on GitHub (Actions), published on the Releases page as `latest`. Not yet tested on a real FM-1.
+- Build it yourself: `python3 firmware/fm1-base/tools/build.py firmware --host` for the simulator, `firmware/tools/build_web.sh` for the browser.
+
 ## Controls
 
 Banquise was designed around the controls of the M-VAVE FM-1 synth, and the on-screen buttons carry its names.

@@ -6,8 +6,8 @@
 #pragma once
 
 /* no libc on the device: the few string helpers we need */
-static int str_eq(const char *a, const char *b) { while (*a && *a == *b) { a++; b++; } return *a == *b; }
-static int32_t str_len(const char *s) { int32_t n = 0; while (s[n]) n++; return n; }
+static int bq_eq(const char *a, const char *b) { while (*a && *a == *b) { a++; b++; } return *a == *b; }
+static int32_t bq_len(const char *s) { int32_t n = 0; while (s[n]) n++; return n; }
 
 #define SW 240
 #define SH 240
@@ -147,7 +147,7 @@ static void sprite(const char *const *rows, int32_t nrows, int32_t sx, int32_t s
     int32_t r, c, k, w;
     for (r = 0; r < nrows; r++) {
         const char *row = rows[r];
-        w = str_len(row);
+        w = bq_len(row);
         for (c = 0; c < w; c++) {
             char ch = row[flip ? w - 1 - c : c];
             if (ch == '.') continue;

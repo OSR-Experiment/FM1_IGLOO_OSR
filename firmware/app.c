@@ -122,13 +122,13 @@ static const char *const MODES[4] = {"Day / night cycle", "Day", "Night", "Storm
 static int sound_idx(const char *n)
 {
     int i;
-    for (i = 0; i < NFAMILY * PER_FAMILY; i++) if (str_eq(SOUND_NAME[i], n)) return i;
+    for (i = 0; i < NFAMILY * PER_FAMILY; i++) if (bq_eq(SOUND_NAME[i], n)) return i;
     return 0;
 }
 static int grid_idx(const char *n)
 {
     int i;
-    for (i = 0; i < NGRID; i++) if (str_eq(GRID_DEF[i].name, n)) return i;
+    for (i = 0; i < NGRID; i++) if (bq_eq(GRID_DEF[i].name, n)) return i;
     return 0;
 }
 

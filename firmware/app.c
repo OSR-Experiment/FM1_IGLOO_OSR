@@ -122,13 +122,13 @@ static const char *const MODES[4] = {"Day / night cycle", "Day", "Night", "Storm
 static int sound_idx(const char *n)
 {
     int i;
-    for (i = 0; i < NFAMILY * PER_FAMILY; i++) if (!strcmp(SOUND_NAME[i], n)) return i;
+    for (i = 0; i < NFAMILY * PER_FAMILY; i++) if (str_eq(SOUND_NAME[i], n)) return i;
     return 0;
 }
 static int grid_idx(const char *n)
 {
     int i;
-    for (i = 0; i < NGRID; i++) if (!strcmp(GRID_DEF[i].name, n)) return i;
+    for (i = 0; i < NGRID; i++) if (str_eq(GRID_DEF[i].name, n)) return i;
     return 0;
 }
 
@@ -260,8 +260,8 @@ static int trail_n;
 static void trail_push(float x, float y)
 {
     if (trail_n == TRAIL_N) {
-        memmove(trail_x, trail_x + 1, sizeof(float) * (TRAIL_N - 1));
-        memmove(trail_y, trail_y + 1, sizeof(float) * (TRAIL_N - 1));
+        int k;
+        for (k = 0; k < TRAIL_N - 1; k++) { trail_x[k] = trail_x[k + 1]; trail_y[k] = trail_y[k + 1]; }
         trail_n--;
     }
     trail_x[trail_n] = x; trail_y[trail_n] = y; trail_n++;
@@ -907,7 +907,7 @@ static void steps_tick(void)
             prints[i].t = now; prints[i].lit = 0; prints[i].note = note;
             print_head = (print_head + 1) % PRINT_N;
             if (print_count < PRINT_N) print_count++;
-            if (log_n == LOG_N) { memmove(step_log, step_log + 1, sizeof(int) * (LOG_N - 1)); log_n--; }
+            if (log_n == LOG_N) { int k; for (k = 0; k < LOG_N - 1; k++) step_log[k] = step_log[k + 1]; log_n--; }
             step_log[log_n++] = i;
         }
     }

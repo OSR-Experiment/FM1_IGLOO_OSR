@@ -44,6 +44,12 @@ static inline float blep(float t, float dt)
 }
 static inline float saw(float ph, float dt) { return 2.0f * ph - 1.0f - blep(ph, dt); }
 static inline float tri(float ph) { return 1.0f - 4.0f * fm_fabsf(ph - 0.5f); }
+/* a cheap sine (a corrected parabola, ~0.1 % off): the bells' upper partials do not need better */
+static inline float qsin(float ph)
+{
+    float t = ph - 0.5f, p = -8.0f * t * (1.0f - 2.0f * fm_fabsf(t));
+    return 0.775f * p + 0.225f * p * fm_fabsf(p);
+}
 
 /* ------------------------------------------------------------------ one-shots (main loop -> render) --- */
 enum { EV_BELL, EV_PAD, EV_WOOD, EV_STEP, EV_WOOF, EV_SPLASH };
@@ -68,7 +74,7 @@ void world_splash(void) { push(EV_SPLASH, 0, 0, 0, 0); }
 
 /* ------------------------------------------------------------------ voices --- */
 /* tones: the bells (triangle + two sines), the aurora's pads (two sines, slow), the pines' wood */
-#define NT 12
+#define NT 10
 typedef struct {
     uint8_t on, kind;
     float ph[3], inc[3], amp[3];
@@ -289,8 +295,8 @@ void world_render(float *dry, float *send, uint32_t n)
                 if (t->atk_n) { t->env += t->atk_inc; t->atk_n--; }
                 else if (t->dec_lin > 0.0f) { t->env -= t->dec_lin; if (t->env <= 0.0f) { t->on = 0; continue; } }
                 else { t->env *= t->dec_mul; if (t->env < 0.0005f * t->peak + 1e-6f) { t->on = 0; continue; } }
-                v = (t->kind == EV_BELL ? tri(t->ph[0]) : fm_sin_turns(t->ph[0])) * t->amp[0]
-                  + fm_sin_turns(t->ph[1]) * t->amp[1] + fm_sin_turns(t->ph[2]) * t->amp[2];
+                v = (t->kind == EV_BELL ? tri(t->ph[0]) : qsin(t->ph[0])) * t->amp[0] + qsin(t->ph[1]) * t->amp[1];
+                if (t->amp[2] > 0.0f) v += qsin(t->ph[2]) * t->amp[2];
                 bl += v * t->env;
                 t->ph[0] += t->inc[0]; if (t->ph[0] >= 1.0f) t->ph[0] -= 1.0f;
                 t->ph[1] += t->inc[1]; if (t->ph[1] >= 1.0f) t->ph[1] -= 1.0f;

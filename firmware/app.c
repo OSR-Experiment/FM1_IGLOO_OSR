@@ -771,7 +771,7 @@ static void pirouette(void)
 {
     int i;
     spin_t = music_t;
-    for (i = 0; i < 6; i++) world_bell(tone_at(i), 0.06f, 1.4f);
+    for (i = 0; i < 4; i++) world_bell(tone_at(i), 0.07f, 1.4f);
 }
 static void action(void)
 {
@@ -1694,7 +1694,12 @@ void app_frame(void)
     phare_ang += 6.2831853f / (4.0f * beat()) * 0.35f * 0.016f;
     if (phare_ang > 6.2831853f) phare_ang -= 6.2831853f;
     camera();
-    cv_begin(240, 240, RGB(10, 16, 24));
+    {   /* the canvas is the whole screen and every frame covers all of it: no need to clear it, only to wait
+         * for the last transfer to be done with it */
+        static int begun;
+        if (!begun) { cv_begin(240, 240, RGB(10, 16, 24)); begun = 1; }
+        else lcd_sync();
+    }
     surface(lo, VIEW, VIEW);
     if (scene == SC_OUT) draw_outside(time);
     else if (scene == SC_RIVER) draw_river(time);

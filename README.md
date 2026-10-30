@@ -10,7 +10,7 @@ There is a quest (the captain's journal, a lighthouse to relight, an ice flute, 
 
 `firmware/` is Banquise as a real FM-1 firmware, built on fm1-base like OSR-1. It is being ported in steps:
 
-1. **The walk** (done): the ice field, Obsimo, Seito, the wind, the drone and the steps, day and night, the igloo and its synth, the places that wake the synth up.
+1. **The walk** (done, redrawn for the FM-1's 2.8 cm screen: Obsimo 6 mm tall, a 30 x 30 ice field, every inside on one screen): the ice field, Obsimo, Seito, the wind, the drone and the steps, day and night, the igloo and its synth, the places that wake the synth up, the ice rink (you glide), the little holes and the river under the ice.
 2. The playable places: fishing, the boat and its kick, the ice cave, the forest, the fire, the lighthouse.
 3. The quest and the rest: the journal, the ending, the outfits, the seals, Yucca...
 

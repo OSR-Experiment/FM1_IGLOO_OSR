@@ -1,0 +1,23 @@
+# west to the little hole: down into the river under the ice, slide, climb out
+wait 600
+press PLAY
+wait 350
+release PLAY
+press SEQ
+wait 4480
+release SEQ
+expect scene 0
+shot pit.png
+press PLAY
+wait 900
+release PLAY
+wait 500
+expect scene 2
+shot river.png
+press REC
+wav river.wav
+wait 3000
+release REC
+wait 1500
+wavstop
+shot river_slide.png

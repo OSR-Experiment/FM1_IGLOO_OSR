@@ -1,0 +1,20 @@
+# south to the rink: you glide; then west to the little hole: the river under the ice
+wait 600
+press PLAY
+wait 2200
+release PLAY
+press PLAY
+wait 600
+expect gliding 1
+shot rink_on.png
+wav glide.wav
+press REC
+wait 1200
+release REC
+release PLAY
+wait 1500
+wavstop
+shot rink.png
+tap LFO
+wait 400
+shot spin.png

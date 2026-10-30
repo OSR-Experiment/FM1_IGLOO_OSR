@@ -19,6 +19,8 @@ typedef struct {
     float rev;           /* the world's share of reverb, 0..1 */
     float bpm;           /* the steps' tempo: they fall on the eighths */
     float cold;          /* 0..1: the bells shiver */
+    float skate, skate_f;  /* the blades' hiss on the rink: level, band (Hz) */
+    float river;           /* the river under the ice: its rumble */
     uint8_t moving, ground, dog;
 } world_params_t;
 
@@ -30,6 +32,7 @@ void world_pad(float midi, float vel);          /* a slow note that swells and f
 void world_wood(float midi, float vel);         /* a short wooden note (the pines) */
 void world_step(int ground, int accent);
 void world_woof(void);
+void world_splash(void);                       /* falling through the ice */
 void world_render(float *dry_lr, float *send, uint32_t n);
 
 /* the eighths' clock, and the steps it played (for the screen: the prints, the echo) */

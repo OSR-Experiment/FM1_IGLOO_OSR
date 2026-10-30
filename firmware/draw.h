@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Obsimo (OSR Records) */
-/* Banquise: drawing on the whole-screen canvas (gfx.c's cv_px, 240 x 240, pixels byte-swapped RGB565).
+/* Banquise: drawing on a surface (the small world, or gfx.c's whole-screen canvas; pixels byte-swapped RGB565).
  * The browser prototype drew with translucent fills, ellipses and gradients: here are the same, small.
  * Included by app.c (the unity build: gfx.c is in scope). Alpha is 0..32. */
 #pragma once
@@ -9,8 +9,11 @@
 static int bq_eq(const char *a, const char *b) { while (*a && *a == *b) { a++; b++; } return *a == *b; }
 static int32_t bq_len(const char *s) { int32_t n = 0; while (s[n]) n++; return n; }
 
-#define SW 240
-#define SH 240
+/* the surface drawn on: the world is drawn small (120 x 120) and shown at twice the size; text goes on the
+ * whole screen. Pixels byte-swapped, like gfx.c's canvas. */
+static uint16_t *FB;
+static uint32_t SW, SH;
+static void surface(uint16_t *px, uint32_t w, uint32_t h) { FB = px; SW = w; SH = h; }
 
 static inline uint16_t blend565(uint16_t bg, uint16_t fg, uint32_t a)
 {
@@ -24,12 +27,12 @@ static inline uint32_t A32(float a) { return a <= 0.0f ? 0u : a >= 1.0f ? 32u : 
 
 static inline void dot(int32_t x, int32_t y, uint16_t c)
 {
-    if ((uint32_t)x < SW && (uint32_t)y < SH) cv_px[y * SW + x] = swap16(c);
+    if ((uint32_t)x < SW && (uint32_t)y < SH) FB[y * SW + x] = swap16(c);
 }
 static inline void dot_a(int32_t x, int32_t y, uint16_t c, uint32_t a)
 {
     if ((uint32_t)x < SW && (uint32_t)y < SH && a) {
-        uint16_t *p = &cv_px[y * SW + x];
+        uint16_t *p = &FB[y * SW + x];
         *p = a >= 32u ? swap16(c) : swap16(blend565(swap16(*p), c, a));
     }
 }
@@ -39,8 +42,8 @@ static void span(int32_t x0, int32_t x1, int32_t y, uint16_t c, uint32_t a)   /*
     uint16_t *p, sc = swap16(c);
     if ((uint32_t)y >= SH || !a) return;
     if (x0 < 0) x0 = 0;
-    if (x1 > SW) x1 = SW;
-    p = &cv_px[y * SW];
+    if (x1 > (int32_t)SW) x1 = (int32_t)SW;
+    p = &FB[y * SW];
     if (a >= 32u) for (; x0 < x1; x0++) p[x0] = sc;
     else for (; x0 < x1; x0++) p[x0] = swap16(blend565(swap16(p[x0]), c, a));
 }
@@ -128,7 +131,7 @@ static void glow(int32_t cx, int32_t cy, int32_t r, uint16_t c, float a0)
 {
     int32_t x, y;
     if (r > 127) r = 127;
-    if (cx + r < 0 || cx - r >= SW || cy + r < 0 || cy - r >= SH || a0 <= 0.0f) return;
+    if (cx + r < 0 || cx - r >= (int32_t)SW || cy + r < 0 || cy - r >= (int32_t)SH || a0 <= 0.0f) return;
     for (y = cy - r; y <= cy + r; y++) {
         if ((uint32_t)y >= SH) continue;
         for (x = cx - r; x <= cx + r; x++) {

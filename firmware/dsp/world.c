@@ -46,7 +46,7 @@ static inline float saw(float ph, float dt) { return 2.0f * ph - 1.0f - blep(ph,
 static inline float tri(float ph) { return 1.0f - 4.0f * fm_fabsf(ph - 0.5f); }
 
 /* ------------------------------------------------------------------ one-shots (main loop -> render) --- */
-enum { EV_BELL, EV_PAD, EV_WOOD, EV_STEP, EV_WOOF };
+enum { EV_BELL, EV_PAD, EV_WOOD, EV_STEP, EV_WOOF, EV_SPLASH };
 typedef struct { uint8_t t, a; float m, v, d; } ev_t;
 #define EQ 32u
 static ev_t eq[EQ];
@@ -64,6 +64,7 @@ void world_pad(float midi, float vel) { push(EV_PAD, 0, midi, vel, 5.0f); }
 void world_wood(float midi, float vel) { push(EV_WOOD, 0, midi, vel, 0.5f); }
 void world_step(int ground, int accent) { push(EV_STEP, (uint8_t)(ground | (accent ? 0x80 : 0)), 0, 0, 0); }
 void world_woof(void) { push(EV_WOOF, 0, 0, 0, 0); }
+void world_splash(void) { push(EV_SPLASH, 0, 0, 0, 0); }
 
 /* ------------------------------------------------------------------ voices --- */
 /* tones: the bells (triangle + two sines), the aurora's pads (two sines, slow), the pines' wood */
@@ -81,6 +82,8 @@ static tone_t tone[NT];
 typedef struct {
     uint8_t on, bark;
     svf_t f;
+    float fc, fc_mul;                  /* a sweeping band (the splash): 0 = fixed */
+    uint32_t fc_n;
     float g, env, peak, atk_inc, dec_mul;
     uint32_t atk_n, delay_n;
     float ph, inc, inc_mul, ping;      /* the metal ping / the bark's square */
@@ -150,6 +153,7 @@ static void start_hit(int ground, int accent, uint32_t delay_n)
     const float *c = STEP_CONF[ground < NGROUND ? ground : 0];
     float lv = c[2] * (accent ? 1.0f : 0.7f);
     h->bark = 0;
+    h->fc = 0.0f;
     h->f.ic1 = h->f.ic2 = 0.0f;
     h->g = svf_g(c[0] * (accent ? 1.0f : 0.85f));
     h->env = 0.0f; h->peak = lv;
@@ -165,10 +169,25 @@ static void start_hit(int ground, int accent, uint32_t delay_n)
     h->on = 1;
 }
 
+static void start_splash(void)
+{
+    hit_t *h = free_hit();
+    h->bark = 2;
+    h->f.ic1 = h->f.ic2 = 0.0f;
+    h->fc = 2400.0f; h->fc_mul = fm_powf(200.0f / 2400.0f, 1.0f / (0.7f * SR)); h->fc_n = 0;
+    h->g = svf_g(2400.0f);
+    h->env = 0.0f; h->peak = 0.3f;
+    h->atk_n = 40u; h->atk_inc = 0.3f / 40.0f;
+    h->dec_mul = fm_powf(0.001f / 0.3f, 1.0f / (0.8f * SR));
+    h->delay_n = 0; h->ping_env = 0.0f;
+    h->on = 1;
+}
+
 static void start_bark(uint32_t delay_n)
 {
     hit_t *h = free_hit();
     h->bark = 1;
+    h->fc = 0.0f;
     h->f.ic1 = h->f.ic2 = 0.0f;
     h->g = svf_g(1200.0f);
     h->env = 0.0f; h->peak = 0.1f;
@@ -182,7 +201,8 @@ static void start_bark(uint32_t delay_n)
 }
 
 /* ------------------------------------------------------------------ the bed: wind, drone --- */
-static svf_t wbp, wlp, dlp;
+static svf_t wbp, wlp, dlp, skbp, rvlp;
+static float s_skate, s_river, s_skf, rv_lfo;
 static float w_lfo, w_gust, w_pan, d_lfo;     /* LFO phases, in turns */
 static float d_ph[4], d_midi;
 static float s_wind, s_drone;                  /* levels, smoothed per block */
@@ -195,14 +215,14 @@ void world_init(void)
 {
     WP.wind = 0.0f; WP.wind_bp = 480.0f; WP.wind_lp = 6000.0f;
     WP.drone = 0.0f; WP.drone_midi = 62.0f; WP.steps = 0.65f; WP.bells = 0.75f; WP.rev = 0.55f;
-    WP.bpm = 84.0f; WP.cold = 0.0f; WP.moving = 0; WP.ground = 0; WP.dog = 0;
+    WP.bpm = 84.0f; WP.cold = 0.0f; WP.skate = 0.0f; WP.skate_f = 2000.0f; WP.river = 0.0f; WP.moving = 0; WP.ground = 0; WP.dog = 0;
     d_midi = 62.0f;
 }
 
 void world_render(float *dry, float *send, uint32_t n)
 {
     uint32_t s, i;
-    float wl, gbp, glp, gd, dinc[4], ang, rdry, rsend, bells = WP.bells;
+    float gsk, grv, wl, gbp, glp, gd, dinc[4], ang, rdry, rsend, bells = WP.bells;
     const float DSEMI[4] = {-24.0f, -24.0f, -17.0f, -36.0f}, DDET[4] = {-6.0f, 7.0f, 0.0f, 0.0f};
     const float DLVL[4] = {0.22f, 0.22f, 0.14f, 0.25f};   /* the sub: half the browser's (a small speaker cannot play it, it only ate the headroom) */
     float half_tick = 0.0f;
@@ -214,6 +234,7 @@ void world_render(float *dry, float *send, uint32_t n)
         eq_tail = (eq_tail + 1u) % EQ;
         if (e.t == EV_STEP) start_hit(e.a & 0x7F, e.a & 0x80, 0);
         else if (e.t == EV_WOOF) { start_bark(0); start_bark((uint32_t)(0.16f * SR)); }
+        else if (e.t == EV_SPLASH) start_splash();
         else start_tone(e.t, e.m, e.v, e.d);
     }
 
@@ -226,6 +247,11 @@ void world_render(float *dry, float *send, uint32_t n)
     w_pan += 0.05f * (float)n / SR; if (w_pan >= 1.0f) w_pan -= 1.0f;
     d_lfo += 0.045f * (float)n / SR; if (d_lfo >= 1.0f) d_lfo -= 1.0f;
     wl = s_wind * (1.0f + 0.8f * fm_sin_turns(w_gust));
+    s_skate += (WP.skate - s_skate) * 0.25f;            /* ~20 ms */
+    s_skf += (WP.skate_f - s_skf) * 0.1f;
+    s_river += (WP.river - s_river) * 0.02f;
+    rv_lfo += 0.3f * (float)n / SR; if (rv_lfo >= 1.0f) rv_lfo -= 1.0f;
+    gsk = svf_g(s_skf); grv = svf_g(520.0f + 180.0f * fm_sin_turns(rv_lfo));
     gbp = svf_g(WP.wind_bp + 260.0f * fm_sin_turns(w_lfo));
     glp = svf_g(WP.wind_lp);
     gd = svf_g(380.0f + 160.0f * fm_sin_turns(d_lfo));
@@ -237,8 +263,11 @@ void world_render(float *dry, float *send, uint32_t n)
         float p = (fm_sin_turns(w_pan) + 1.0f) * 0.5f;    /* the wind wanders, left to right: 0..1 */
         float pl = fm_cosf(p * 1.5707963f) * 1.2f, pr = fm_sinf(p * 1.5707963f) * 1.2f;
         for (s = 0; s < n; s++) {
-            float x = noise(), wv, dv = 0.0f, bl = 0.0f, st = 0.0f;
+            float x = noise(), wv, dv = 0.0f, bl = 0.0f, st = 0.0f, bed = 0.0f;
             svf_out_t o;
+            /* the blades, the river: noise beds that come and go */
+            if (s_skate > 1e-4f) { o = svf(&skbp, x, gsk, 0.4f); bed += o.bp * 0.4f * s_skate * 2.0f; }
+            if (s_river > 1e-4f) { o = svf(&rvlp, noise(), grv, 0.33f); bed += o.lp * s_river * 2.0f; }
             /* wind: band-passed noise, then a lowpass */
             o = svf(&wbp, x, gbp, 1.25f);
             o = svf(&wlp, o.bp * 1.25f, glp, 1.4142f);
@@ -276,6 +305,13 @@ void world_render(float *dry, float *send, uint32_t n)
                 if (h->delay_n) { h->delay_n--; continue; }
                 if (h->atk_n) { h->env += h->atk_inc; h->atk_n--; }
                 else { h->env *= h->dec_mul; if (h->env < 0.001f && h->ping_env < 0.001f) { h->on = 0; continue; } }
+                if (h->fc > 0.0f) {
+                    h->fc *= h->fc_mul;
+                    if (++h->fc_n >= 32u) { h->fc_n = 0; h->g = svf_g(h->fc); }
+                    o = svf(&h->f, noise(), h->g, 0.5f);
+                    st += o.bp * 0.5f * h->env;
+                    continue;
+                }
                 if (h->bark) {
                     src = h->ph < 0.5f ? 1.0f : -1.0f;
                     h->ph += h->inc; if (h->ph >= 1.0f) h->ph -= 1.0f;
@@ -301,9 +337,9 @@ void world_render(float *dry, float *send, uint32_t n)
                 ticks++;
                 if (WP.moving) { start_hit(WP.ground, (ticks & 1u) == 0u, 0); steps++; }
             }
-            dry[2 * s] = (wv * pl + dv + (bl * rdry) + st) * 1.5f;
-            dry[2 * s + 1] = (wv * pr + dv + (bl * rdry) + st) * 1.5f;
-            send[s] = (wv * 0.7f + dv * 0.6f + bl * rsend + st * 0.1f) * 1.5f;
+            dry[2 * s] = (wv * pl + dv + (bl * rdry) + st + bed) * 1.5f;
+            dry[2 * s + 1] = (wv * pr + dv + (bl * rdry) + st + bed) * 1.5f;
+            send[s] = (wv * 0.7f + dv * 0.6f + bl * rsend + st * 0.1f + bed * 0.4f) * 1.5f;
         }
     }
 }

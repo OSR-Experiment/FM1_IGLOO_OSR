@@ -3,23 +3,22 @@
 wait 800
 shot start.png
 expect scene 0
-# walk a little (EDIT is up): the help goes, the steps play
 press PLAY
-wait 600
+wait 400
 release PLAY
 press REC
 wav walk.wav
-wait 2500
+wait 1200
 release REC
 wait 1500
 wavstop
 shot walked.png
-# home: HOME, then the synth (it is right ahead, up from the door)
 tap HOME
 wait 800
 expect scene 1
+shot home_door.png
 press EDIT
-wait 900
+wait 700
 release EDIT
 shot home.png
 tap LFO
@@ -32,9 +31,8 @@ wav home_synth.wav
 wait 2500
 wavstop
 shot home_synth.png
-# out through the door
 press PLAY
-wait 2200
+wait 1500
 release PLAY
 wait 300
 expect scene 0
